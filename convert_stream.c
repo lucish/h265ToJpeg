@@ -350,7 +350,7 @@ int main()
     }
     char *output = h265_to_jpeg(input, size);
 
-    printf("len: %ld,  write_offset: %d\n", strlen(output), write_offset);
+    printf("jpeg str len: %ld,  write_offset: %d\n", strlen(output), write_offset);
 
     char *outputFile = "bin/test.jpeg";
     //测试 将读取到的数据全部写入文件
