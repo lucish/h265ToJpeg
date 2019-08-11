@@ -22,66 +22,6 @@ FILE *fp_write;
 int write_offset = 0;
 char jpeg_data[1048576] = {"\0"};
 
-int main()
-{
-    char *inputFile = "src/test.h265";
-    FILE *fp_read;
-    fp_read = fopen(inputFile, "rb+");
-
-    //测试 将目标文件全部读取到h265_data中, true_size为文件实际大小
-    if (!feof(fp_read))
-    {
-        read_true_size = fread(h265_data, 1, BUF_SIZE, fp_read);
-        printf("一次读取全部文件 实际大小: %d\n", read_true_size);
-        if (!read_true_size)
-        {
-            printf("read file err!\n");
-            return 0;
-        }
-        // printf("h256 strlen: %ld\n", strlen(h265_data));
-    }
-    convert();
-
-    char *outputFile = "bin/test.jpeg";
-    //测试 将读取到的数据全部写入文件
-    fp_write = fopen(outputFile, "wb+");
-    if (!feof(fp_write))
-    {
-        int true_size = fwrite(jpeg_data, 1, write_offset, fp_write);
-        write_offset += true_size;
-        printf("write_offset: %d\n", write_offset);
-        printf("write file success\n");
-    }
-    else
-    {
-        printf("write file err");
-        return 0;
-    }
-
-    // if (h265_data)
-    // {
-    //     free(h265_data);
-    // }
-    fclose(fp_read);
-    fclose(fp_write);
-    printf("final read offset: %d\n", read_offset);
-    return 0;
-}
-
-//返回des size
-char *h265_to_jpeg(char *src, int size)
-{
-    memcpy(h265_data, src, size);
-    read_true_size = size;
-    int err = 0;
-    err = convert();
-    if (err != 0)
-    {
-        return jpeg_data;
-    }
-    return jpeg_data;
-}
-
 //读取数据的回调函数-------------------------
 //AVIOContext使用的回调函数！
 //注意：返回值是读取的字节数
@@ -97,7 +37,7 @@ int fill_iobuffer(void *opaque, uint8_t *buf, int buf_size)
         //读取未溢出 直接复制
         memcpy(buf, h265_data + read_offset, buf_size);
         read_offset += buf_size;
-        // printf("read offset: %d\n", read_offset);
+        printf("read offset: %d\n", read_offset);
         return buf_size;
     }
     else
@@ -113,7 +53,7 @@ int fill_iobuffer(void *opaque, uint8_t *buf, int buf_size)
             int real_read = read_true_size - read_offset;
             memcpy(buf, h265_data + read_offset, real_read);
             read_offset += buf_size;
-            // printf("read offset: %d\n", read_offset);
+            printf("read offset: %d\n", read_offset);
             return real_read;
         }
     }
@@ -133,9 +73,9 @@ int convert()
     //打开文件描述符
     // fp_open = fopen(inputFile, "rb+");
     fmtCtx = avformat_alloc_context();
-    unsigned char *iobuffer = (unsigned char *)av_malloc(32768);
+    unsigned char *iobuffer = (unsigned char *)av_malloc(1048576);
     //初始化AVIOContext  fill_iobuffer为自定的回调函数
-    AVIOContext *avio = avio_alloc_context(iobuffer, 32768, 0, NULL, fill_iobuffer, NULL, NULL);
+    AVIOContext *avio = avio_alloc_context(iobuffer, 1048576, 0, NULL, fill_iobuffer, NULL, NULL);
     fmtCtx->pb = avio;
 
     if (avformat_open_input(&fmtCtx, "nothing", NULL, NULL) < 0) // 成功返回0, 错误返回负值, 后两个参数用于指定文件格式
@@ -250,9 +190,9 @@ int saveJpg(AVFrame *pFrame)
     // 设置输出文件格式
     // pFormatCtx->oformat = av_guess_format("mjpeg", NULL, NULL);
 
-    unsigned char *outbuffer = (unsigned char *)av_malloc(32768);
+    unsigned char *outbuffer = (unsigned char *)av_malloc(1048576);
     //新建一个AVIOContext  并与pFormatCtx关联
-    AVIOContext *avio_out = avio_alloc_context(outbuffer, 32768, 1, NULL, NULL, write_buffer, NULL);
+    AVIOContext *avio_out = avio_alloc_context(outbuffer, 1048576, 1, NULL, NULL, write_buffer, NULL);
     pFormatCtx->pb = avio_out;
     pFormatCtx->flags = AVFMT_FLAG_CUSTOM_IO | AVFMT_FLAG_FLUSH_PACKETS;
 
@@ -370,5 +310,65 @@ int saveJpg(AVFrame *pFrame)
     }
     // printf("avcodec_close\n");
 
+    return 0;
+}
+
+//返回des
+char *h265_to_jpeg(char *src, int size)
+{
+    memcpy(h265_data, src, size);
+    // h265_data = src;
+    read_true_size = size;
+    int err = 0;
+    err = convert();
+    if (err != 0)
+    {
+        return NULL;
+    }
+    return jpeg_data;
+}
+
+int main()
+{
+    char *inputFile = "/home/lucis/work/gopath/src/github.com/lucish/convert-video/src/test.h265";
+    FILE *fp_read;
+    fp_read = fopen(inputFile, "rb+");
+
+    char input[1048576];
+    int size = 0;
+    //测试 将目标文件全部读取到h265_data中, true_size为文件实际大小
+    if (!feof(fp_read))
+    {
+        size = fread(input, 1, BUF_SIZE, fp_read);
+        printf("一次读取全部文件 实际大小: %d\n", size);
+        if (!size)
+        {
+            printf("read file err!\n");
+            return 0;
+        }
+        printf("h256 strlen: %ld\n", strlen(h265_data));
+    }
+    char *output = h265_to_jpeg(input, size);
+
+    printf("len: %ld,  write_offset: %d\n", strlen(output), write_offset);
+
+    char *outputFile = "bin/test.jpeg";
+    //测试 将读取到的数据全部写入文件
+    fp_write = fopen(outputFile, "wb+");
+    if (!feof(fp_write))
+    {
+        int true_size = fwrite(output, 1, write_offset, fp_write);
+        write_offset += true_size;
+        // printf("write_offset: %d\n", write_offset);
+        // printf("write file success\n");
+    }
+    else
+    {
+        printf("write file err");
+        return 0;
+    }
+    fclose(fp_read);
+    fclose(fp_write);
+    // printf("final read offset: %d\n", read_offset);
     return 0;
 }
