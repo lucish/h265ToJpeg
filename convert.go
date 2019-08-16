@@ -1,7 +1,7 @@
 package main
 
 /*
-
+//user you own clib path and *.h path
 #cgo CFLAGS: -I/usr/local/ffmpeg/include
 #cgo LDFLAGS:-L/usr/local/ffmpeg/lib -lavcodec -lavformat -lavfilter -lavutil -lavdevice -lswresample
 
@@ -26,20 +26,11 @@ struct Output
     int offset;
 };
 
-//函数声明
+//func declear
 int saveJpg(AVFrame *pFrame, struct Output *output_data);
 //缓存1Mb
 const int BUF_SIZE = 1048576;
 
-//  const 32KB = 32768;
-// char h265_data; //传入的h265文件
-// // char *h265_data;
-// int read_true_size = 0; //h265文件实际大小
-// int read_offset = 0;    //读取的偏移
-
-// int write_offset = 0;
-// uint8_t jpeg_data[1048576] = {"\0"};
-// uint8_t *jpeg_data = NULL;
 
 //读取数据的回调函数-------------------------
 //AVIOContext使用的回调函数！
@@ -47,10 +38,14 @@ const int BUF_SIZE = 1048576;
 //手动初始化AVIOContext只需要两个东西：内容来源的buffer，和读取这个Buffer到FFmpeg中的函数
 //回调函数，功能就是：把buf_size字节数据送入buf即可
 //第一个参数(void *opaque)一般情况下可以不用
+
+//call back fun for AVIOContext
+//retuen the size of data in real
+//send buf_size data to buf
 int fill_iobuffer(void *opaque, uint8_t *buf, int buf_size)
 {
     //从h256_data拷贝到buf中buf_size个字节
-
+    //copy buf_size data to buf  from h265_data
     struct Input *data = (struct Input *)opaque;
     // int read_offset = data->offset;
     int size = data->size;
@@ -58,7 +53,7 @@ int fill_iobuffer(void *opaque, uint8_t *buf, int buf_size)
 
     if (data->offset + buf_size - 1 < size)
     {
-        //读取未溢出 直接复制
+        //has enough data
         memcpy(buf, h265_data + data->offset, buf_size);
         data->offset += buf_size;
         // printf("callback: read offset: %d\n", read_offset);
@@ -66,18 +61,17 @@ int fill_iobuffer(void *opaque, uint8_t *buf, int buf_size)
     }
     else
     {
-        //已经溢出无法读取
+        //no data to read
         if (data->offset >= size)
         {
             return -1;
         }
         else
         {
-            //还有剩余字节未读取但不到buf_size 读取剩余字节
             int real_read = size - data->offset;
             memcpy(buf, h265_data + data->offset, real_read);
             data->offset += buf_size;
-            printf("callback: read offset: %d\n", data->offset);
+            // printf("callback: read offset: %d\n", data->offset);
             return real_read;
         }
     }
@@ -94,11 +88,10 @@ int convert(struct Input *input_data, struct Output *output_data)
     AVFrame *frame;                      // 帧
     AVPacket avpkt;                      // 数据包
 
-    //打开文件描述符
-    // fp_open = fopen(inputFile, "rb+");
     fmtCtx = avformat_alloc_context();
     unsigned char *iobuffer = (unsigned char *)av_malloc(BUF_SIZE);
-    //初始化AVIOContext  fill_iobuffer为自定的回调函数
+
+    //init AVIOContext  fill_iobuffer is a callback func
     AVIOContext *avio = avio_alloc_context(iobuffer, BUF_SIZE, 0, input_data, fill_iobuffer, NULL, NULL);
     fmtCtx->pb = avio;
 
@@ -108,14 +101,14 @@ int convert(struct Input *input_data, struct Output *output_data)
         exit(0);
     }
 
-    if (avformat_find_stream_info(fmtCtx, NULL) < 0) // 失败返回负值
+    if (avformat_find_stream_info(fmtCtx, NULL) < 0)
     {
         printf("Error in find stream");
         exit(0);
     }
 
-    //av_dump_format(fmt_ctx, 0, inputFile, 0); // 打印控制信息
-    av_init_packet(&avpkt); // 初始化数据包
+    //av_dump_format(fmt_ctx, 0, inputFile, 0);
+    av_init_packet(&avpkt);
     avpkt.data = NULL;
     avpkt.size = 0;
 
@@ -126,10 +119,11 @@ int convert(struct Input *input_data, struct Output *output_data)
         exit(0);
     }
 
-    originPar = fmtCtx->streams[streamType]->codecpar; // 获取流对应的解码器参数
-    codec = avcodec_find_decoder(originPar->codec_id); // 根据解码器参数获取解码器
+    //auto find right encoder
+    originPar = fmtCtx->streams[streamType]->codecpar;
+    codec = avcodec_find_decoder(originPar->codec_id);
     if (!codec)
-    { // 未找到返回NULL
+    {
         printf("Error in get the codec");
         exit(0);
     }
@@ -141,7 +135,7 @@ int convert(struct Input *input_data, struct Output *output_data)
         exit(0);
     }
 
-    if (avcodec_parameters_to_context(codeCtx, originPar) < 0) // 替换解码器上下文参数
+    if (avcodec_parameters_to_context(codeCtx, originPar) < 0)
     {
         printf("Error in replace the parameters int the codeCtx");
         exit(0);
@@ -171,10 +165,11 @@ int convert(struct Input *input_data, struct Output *output_data)
         }
     }
 
+    //free av_packt
     av_packet_unref(&avpkt);
 }
 
-//写文件的回调函数
+//your own callback func, to deal with converted data
 int write_buffer(void *opaque, uint8_t *buf, int buf_size)
 {
     struct Output *data = (struct Output *)opaque;
@@ -195,28 +190,19 @@ int saveJpg(AVFrame *pFrame, struct Output *output_data)
     int height = pFrame->height;
     AVCodecContext *pCodeCtx = NULL;
 
-    //打开输出文件
-    // fp_write = fopen(out_name, "wb+");
     AVFormatContext *pFormatCtx = NULL;
     avformat_alloc_output_context2(&pFormatCtx, NULL, "mjpeg", NULL);
-    // AVFormatContext *pFormatCtx = avformat_alloc_context();
-    // 设置输出文件格式
-    // pFormatCtx->oformat = av_guess_format("mjpeg", NULL, NULL);
 
+    //new a AVIOContext and contact with pFormatCtx
+    //you need give AVIOContext your own call back func, to tell AVIOContext how to write the converted data
     unsigned char *outbuffer = (unsigned char *)av_malloc(BUF_SIZE);
-    //新建一个AVIOContext  并与pFormatCtx关联
     AVIOContext *avio_out = avio_alloc_context(outbuffer, BUF_SIZE, 1, output_data, NULL, write_buffer, NULL);
+    //contact with pFormatCtx
     pFormatCtx->pb = avio_out;
     pFormatCtx->flags = AVFMT_FLAG_CUSTOM_IO | AVFMT_FLAG_FLUSH_PACKETS;
 
-    // //创建并初始化输出AVIOContext
-    // if (avio_open(&pFormatCtx->pb, "./bin/nothing.jpeg", AVIO_FLAG_READ_WRITE) < 0)
-    // {
-    //     printf("Couldn't open output file.\n");
-    //     return -1;
-    // }
 
-    // 构建一个新stream
+    // new stream
     AVStream *pAVStream = avformat_new_stream(pFormatCtx, 0);
     if (pAVStream == NULL)
     {
@@ -269,11 +255,11 @@ int saveJpg(AVFrame *pFrame, struct Output *output_data)
     int y_size = width * height;
 
     //Encode
-    // 给AVPacket分配足够大的空间
+    //give AVPacket enough space
     AVPacket pkt;
     av_new_packet(&pkt, y_size * 3);
 
-    // 编码数据
+    // send frame
     ret = avcodec_send_frame(pCodeCtx, pFrame);
     if (ret < 0)
     {
@@ -281,7 +267,7 @@ int saveJpg(AVFrame *pFrame, struct Output *output_data)
         return -1;
     }
 
-    // 得到编码后数据
+    // recv packt
     ret = avcodec_receive_packet(pCodeCtx, &pkt);
     if (ret < 0)
     {
@@ -373,54 +359,46 @@ func c_h265_to_jpeg(src []byte, size int) (des []byte, err error) {
 	res := C.h265_to_jpeg(c_src, c_des, *c_int)
 	// fmt.Println(res)
 	if res < 0 {
-		err = errors.New("C encode err!")
+		err = errors.New("C convert err!")
 		return
 	}
 	des = des[:res]
 	return
 }
 
-var times = 10
+func startConvert(src []byte) {
 
-//BenchmarkFFMpegC test
-func BenchmarkFFMpegC(src []byte) {
-
-	var des []byte
-	for i := 0; i < times; i++ {
-		func() {
-			des, _ = c_h265_to_jpeg(src, len(src))
-		}()
-
+	des, err := c_h265_to_jpeg(src, len(src))
+	if err != nil {
+		return
 	}
-
+	//write files
 	WriteWithIoutil("./bin/testGo.jpeg", des)
 }
 
 func main() {
-	var now, end time.Time
-	// go func() {
-	// 	log.Println(http.ListenAndServe("localhost:10000", nil))
-	// }()
 
-	//读取文件
-	inputFile := "/work/dana_work/gopath/src/github.com/lucish/convert-video/src/huangxiao.h265"
+	//read resource
+	inputFile := "resource/test.h265"
 	src, err := ReadAll(inputFile)
 	if err != nil || len(src) == 0 {
 		fmt.Println(err.Error())
 		fmt.Println("read file err")
 		return
 	}
-	fmt.Println("read file len: ", len(src))
+	// fmt.Println("read file len: ", len(src))
 
-	fmt.Println("开始执行转码")
-	now = time.Now()
-	BenchmarkFFMpegC(src)
-	end = time.Now()
+	fmt.Println("start convert")
 
-	fmt.Printf("FFMpegC loop %d times, the cost time is %d\n", times, end.Sub(now))
+	start := time.Now().UnixNano()
+	startConvert(src)
+	end := time.Now().UnixNano()
+
+	fmt.Printf("cost time is %d ms\n", (end-start)/1e6)
 	// select {}
 }
 
+//read file
 func ReadAll(filePth string) ([]byte, error) {
 	f, err := os.Open(filePth)
 	defer f.Close()
@@ -430,10 +408,10 @@ func ReadAll(filePth string) ([]byte, error) {
 	return ioutil.ReadAll(f)
 }
 
-//使用ioutil.WriteFile方式写入文件,是将[]byte内容写入文件,如果content字符串中没有换行符的话，默认就不会有换行符
-func WriteWithIoutil(name string, content []byte) error {
-	if err := ioutil.WriteFile(name, content, 0644); err == nil {
-		fmt.Println("写入文件成功")
+//weite file
+func WriteWithIoutil(filePath string, content []byte) error {
+	if err := ioutil.WriteFile(filePath, content, 0644); err == nil {
+		fmt.Println("write file success")
 	} else {
 		fmt.Println(err.Error())
 	}
