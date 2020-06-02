@@ -7,7 +7,7 @@ import (
 
 func BenchmarkConvert(b *testing.B) {
 	//读取文件
-	inputFile := "/work/dana_work/gopath/src/github.com/lucish/convert-video/src/huangxiao.h265"
+	inputFile := "/test"
 	src, err := ReadAll(inputFile)
 	if err != nil || len(src) == 0 {
 		fmt.Println(err.Error())
